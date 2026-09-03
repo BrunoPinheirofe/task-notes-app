@@ -1,0 +1,37 @@
+import 'package:app/components/drawer_app.dart';
+import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      drawer: DrawerApp(),
+      appBar: AppBar(
+        
+        title: Row(
+          spacing: 12,
+          mainAxisAlignment: .end,
+          children: [
+            Icon(
+              LucideIcons.bookOpen,
+              color: Theme.of(context).primaryColor,
+              size: 20,
+            ),
+            Text(
+              'Meu Caderno',
+              style: TextStyle(
+                fontFamily: 'Playfair Display',
+                fontWeight: .bold,
+                fontSize: MediaQuery.of(context).textScaler.scale(20),
+              ),
+            ),
+          ],
+        ),
+        
+      ),
+    );
+  }
+}
