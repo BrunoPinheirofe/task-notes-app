@@ -4,12 +4,18 @@ import 'package:flutter/material.dart';
 class AppTheme {
   static ColorScheme colorScheme = ColorScheme.fromSeed(
     seedColor: AppColors.primary,
+    
   ).copyWith(surface: Color(0xFFFDF6E3));
   static ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
     colorScheme: colorScheme,
     primaryTextTheme: textTheme,
     textTheme: textTheme,
+    appBarTheme: appBarThemeData,
+  );
+
+  static AppBarThemeData appBarThemeData = AppBarThemeData(
+    iconTheme: IconThemeData(color: AppColors.onPrimary),
   );
 
   static TextTheme textTheme = TextTheme(
