@@ -25,4 +25,7 @@ class AppColors {
   static const Color chartPriorityHigh = Color(0xFFC0533A);
   static const Color chartPriorityVeryHigh = Color(0xFF4F6B92);
   static const Color chartPriorityUrgent = Color(0xFF5B4434);
+  // 
+  static const Color cardBackGround = Color(0XFFFBF2E3);
+  static const Color cardBorder = Color(0XFFF0E4D2);
 }

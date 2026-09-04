@@ -49,26 +49,24 @@ class DrawerApp extends StatelessWidget {
     return Drawer(
       backgroundColor: AppColors.sidebarBackground,
       child: Column(
+        mainAxisAlignment: .spaceBetween,
         children: [
           _HeadDrawer(),
           Divider(), //TODO: trocar cor
-          Expanded(
-            child: ListView.builder(
-              itemCount: routes.length,
-              itemBuilder: ((context, index) {
-                Map<String, Object> route = routes[index];
-                String label = route["label"] as String;
-                Icon icon = route["icon"] as Icon;
-                String? badge = route["badge"] as String;
-                return _NavigationItemDrawer(
-                  label: label,
-                  icon: icon,
-                  badge: badge,
-                  selected: index == 1,
-                );
-              }),
-            ),
-          ),
+
+          ...routes.map((route) {
+            String label = route["label"] as String;
+            Icon icon = route["icon"] as Icon;
+            String? badge = route["badge"] as String;
+            int index = 0;
+            return _NavigationItemDrawer(
+              label: label,
+              icon: icon,
+              badge: badge,
+              selected: index == 1,
+            );
+          }).toList(),
+
           _FooterDrawer(),
         ],
       ),
@@ -82,7 +80,7 @@ class _HeadDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.only(top: 20, bottom: 10, left: 15),
+      margin: EdgeInsets.only(top: 70, bottom: 10, left: 15),
       child: Row(
         children: [
           Container(

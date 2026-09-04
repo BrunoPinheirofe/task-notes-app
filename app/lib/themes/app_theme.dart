@@ -23,6 +23,21 @@ class AppTheme {
     headlineMedium: TextStyle(fontFamily: 'Playfair Display'),
     headlineLarge: TextStyle(fontFamily: 'Playfair Display'),
 
+    displaySmall: TextStyle(
+      fontFamily: 'Playfair Display',
+      color: AppColors.secondary,
+    ),
+    displayMedium: TextStyle(
+      fontFamily: 'Playfair Display',
+      color: AppColors.secondary,
+    ),
+    displayLarge: TextStyle(
+      fontFamily: 'Playfair Display',
+      color: AppColors.secondary,
+      fontWeight: .bold,
+    ),
+
+
     titleSmall: TextStyle(fontFamily: 'Playfair Display', fontWeight: .bold),
     titleMedium: TextStyle(fontFamily: 'Playfair Display', fontWeight: .bold),
     titleLarge: TextStyle(fontFamily: 'Playfair Display', fontWeight: .bold),

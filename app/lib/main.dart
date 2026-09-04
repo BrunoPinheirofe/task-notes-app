@@ -1,8 +1,11 @@
-import 'package:app/pages/home_page.dart';
+import 'package:app/pages/main_layout.dart';
 import 'package:app/themes/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 void main() {
+  Intl.defaultLocale = 'pt_BR';
+
   runApp(const TaskApp());
 }
 
@@ -15,7 +18,7 @@ class TaskApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       themeMode: .light,
-      home: HomePage(),
+      home: MainLayout(),
     );
   }
 }
