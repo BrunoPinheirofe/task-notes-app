@@ -92,62 +92,6 @@ class HomePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 1. Barra Superior (Resetar Dados)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      showDialog<void>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          backgroundColor: AppColors.cardBackGround,
-                          title: const Text(
-                            'Resetar Dados',
-                            style: TextStyle(fontFamily: 'Playfair Display'),
-                          ),
-                          content: const Text(
-                            'Isso vai restaurar todos os dados para os padrões iniciais. Tem certeza?',
-                            style: TextStyle(fontFamily: 'Lora', fontSize: 13),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              child: const Text('Cancelar'),
-                            ),
-                            FilledButton(
-                              onPressed: () {
-                                Navigator.of(ctx).pop();
-                                onResetData?.call();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Dados resetados!'),
-                                  ),
-                                );
-                              },
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.destructive,
-                              ),
-                              child: const Text('Resetar'),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.border),
-                      foregroundColor: AppColors.onPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    icon: const Icon(LucideIcons.rotateCcw, size: 15),
-                    label: const Text(
-                      'Resetar Dados',
-                      style: TextStyle(fontFamily: 'Lora', fontSize: 12),
-                    ),
-                  ),
-                ],
-              ),
               const SizedBox(height: 16),
 
               // 2. Saudação
