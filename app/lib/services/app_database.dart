@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class AppDatabase {
@@ -37,15 +36,16 @@ class AppDatabase {
 
   Future<String> resolveDbPath() async {
     if (customPath != null) return customPath!;
+    ensurePlatformInitialized();
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final base = await getDatabasesPath();
+      final dir = Directory(base);
       if (!dir.existsSync()) {
         await dir.create(recursive: true);
       }
-      return p.join(dir.path, _dbFileName);
-    } catch (_) {
-      final base = await getDatabasesPath();
       return p.join(base, _dbFileName);
+    } catch (_) {
+      return p.join(Directory.systemTemp.path, _dbFileName);
     }
   }
 

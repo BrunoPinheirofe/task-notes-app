@@ -532,6 +532,13 @@ class UserProfile {
     'avatarIcon': avatarIcon,
     'avatarColor': avatarColor,
   };
+
+  factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
+    displayName: json['displayName'] as String? ?? 'Bruno',
+    username: json['username'] as String? ?? 'Modo Offline',
+    avatarIcon: json['avatarIcon'] as String? ?? 'User',
+    avatarColor: json['avatarColor'] as String? ?? '#C0533A',
+  );
 }
 
 class NotificationSettings {
@@ -572,6 +579,15 @@ class NotificationSettings {
     'mediumAlerts': mediumAlerts,
     'soundAndVibration': soundAndVibration,
   };
+
+  factory NotificationSettings.fromJson(Map<String, dynamic> json) =>
+      NotificationSettings(
+        enabled: json['enabled'] as bool? ?? true,
+        criticalAlerts: json['criticalAlerts'] as bool? ?? true,
+        highAlerts: json['highAlerts'] as bool? ?? true,
+        mediumAlerts: json['mediumAlerts'] as bool? ?? true,
+        soundAndVibration: json['soundAndVibration'] as bool? ?? true,
+      );
 }
 
 enum NotificationUrgency { critical, high, medium, low }

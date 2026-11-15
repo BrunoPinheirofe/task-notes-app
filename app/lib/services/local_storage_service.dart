@@ -1,8 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:app/models/models.dart';
 import 'package:app/services/app_database.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class LocalDataSnapshot {
@@ -38,28 +38,117 @@ class LocalStorageService {
     : _appDb = database ?? AppDatabase.instance;
 
   final AppDatabase _appDb;
+  static bool _sqliteUnavailable = false;
 
-  static const _kLegacyInitializedKey = 'offline_store_initialized_v1';
-  static const _kCategoriesKey = 'offline_categories_v1';
-  static const _kTasksKey = 'offline_tasks_v1';
-  static const _kNotesKey = 'offline_notes_v1';
-  static const _kPointsKey = 'offline_gamification_points_v1';
-  static const _kLevelKey = 'offline_gamification_level_v1';
-  static const _kStreakKey = 'offline_gamification_streak_v1';
-  static const _kBadgesKey = 'offline_gamification_badges_v1';
-  static const _kConnectedUserKey = 'offline_connected_user_v1';
-  static const _kSyncQueueKey = 'offline_sync_queue_v1';
-  static const _kSyncedIdsKey = 'offline_synced_ids_v1';
-  static const _kLastSyncedAtKey = 'offline_last_synced_at_v1';
+  // Fallback em memória para ambientes sem plugin nativo (Web, testes de widget ou hot-reload antes de rebuild)
+  bool _memoryInitialized = false;
+  List<Category> _memoryCategories = const [];
+  List<Task> _memoryTasks = const [];
+  List<Note> _memoryNotes = const [];
+  List<SyncOperation> _memorySyncQueue = const [];
+  Set<String> _memorySyncedIds = const {};
+  final Map<String, String> _memoryMeta = <String, String>{};
 
   Future<Database?> _tryGetSqlite() async {
-    if (kIsWeb) return null;
+    if (kIsWeb || _sqliteUnavailable) return null;
+    if (_appDb.customPath == null &&
+        Platform.environment.containsKey('FLUTTER_TEST')) {
+      return null;
+    }
     try {
       return await _appDb.database;
     } catch (_) {
+      _sqliteUnavailable = true;
       return null;
     }
   }
+
+  Future<String?> _getMeta(String key) async {
+    final db = await _tryGetSqlite();
+    if (db != null) {
+      final rows = await db.query(
+        'app_metadata',
+        where: 'key = ?',
+        whereArgs: [key],
+        limit: 1,
+      );
+      if (rows.isNotEmpty && rows.first['value'] != null) {
+        return rows.first['value'].toString();
+      }
+      return null;
+    }
+    return _memoryMeta[key];
+  }
+
+  Future<void> _setMeta(String key, String? value) async {
+    final db = await _tryGetSqlite();
+    if (db != null) {
+      if (value == null) {
+        await db.delete('app_metadata', where: 'key = ?', whereArgs: [key]);
+      } else {
+        await _putMetaTxn(db, key, value);
+      }
+      return;
+    }
+    if (value == null) {
+      _memoryMeta.remove(key);
+    } else {
+      _memoryMeta[key] = value;
+    }
+  }
+
+  // --- Preferências de Tema, Perfil e Notificações no SQLite (app_metadata) ---
+
+  Future<String?> loadThemeMode() => _getMeta('app_theme_mode');
+
+  Future<void> saveThemeMode(String mode) => _setMeta('app_theme_mode', mode);
+
+  Future<UserProfile> loadUserProfile({String? connectedUsername}) async {
+    final raw = await _getMeta('user_profile');
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final loaded = UserProfile.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+          if (connectedUsername != null && connectedUsername.isNotEmpty) {
+            return loaded.copyWith(username: connectedUsername);
+          }
+          return loaded;
+        }
+      } catch (_) {}
+    }
+    return UserProfile(
+      displayName: 'Bruno',
+      username: connectedUsername ?? 'Modo Offline',
+      avatarIcon: 'User',
+      avatarColor: '#C0533A',
+    );
+  }
+
+  Future<void> saveUserProfile(UserProfile profile) =>
+      _setMeta('user_profile', jsonEncode(profile.toJson()));
+
+  Future<NotificationSettings> loadNotificationSettings() async {
+    final raw = await _getMeta('notification_settings');
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          return NotificationSettings.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+      } catch (_) {}
+    }
+    return const NotificationSettings();
+  }
+
+  Future<void> saveNotificationSettings(NotificationSettings settings) =>
+      _setMeta('notification_settings', jsonEncode(settings.toJson()));
+
+  // --- Carregamento de Snapshot ---
 
   Future<LocalDataSnapshot> loadSnapshot({
     required List<Category> defaultCategories,
@@ -78,7 +167,7 @@ class LocalStorageService {
       );
     }
 
-    return _loadFromPrefsFallback(
+    return _loadFromMemoryFallback(
       defaultCategories: defaultCategories,
       defaultTasks: defaultTasks,
       defaultNotes: defaultNotes,
@@ -101,35 +190,6 @@ class LocalStorageService {
     );
 
     if (initRow.isEmpty) {
-      // Verifica se já existem dados salvos anteriormente em SharedPreferences para migrar sem perda
-      final prefs = await SharedPreferences.getInstance();
-      final hadLegacyData = prefs.getBool(_kLegacyInitializedKey) ?? false;
-
-      if (hadLegacyData) {
-        final legacy = await _loadFromPrefsFallback(
-          defaultCategories: defaultCategories,
-          defaultTasks: defaultTasks,
-          defaultNotes: defaultNotes,
-          defaultUnlockedBadges: defaultUnlockedBadges,
-        );
-        await _seedSqliteTransaction(
-          db: db,
-          categories: legacy.categories,
-          tasks: legacy.tasks,
-          notes: legacy.notes,
-          totalPoints: legacy.totalPoints,
-          currentLevel: legacy.currentLevel,
-          streakDays: legacy.streakDays,
-          unlockedBadges: legacy.unlockedBadges,
-          connectedUser: legacy.connectedUser,
-          syncQueue: legacy.syncQueue,
-          syncedIds: legacy.syncedEntityIds,
-          lastSyncedAt: legacy.lastSyncedAt,
-        );
-        return legacy;
-      }
-
-      // Primeira abertura do app: popula defaults no SQLite
       await _seedSqliteTransaction(
         db: db,
         categories: defaultCategories,
@@ -158,7 +218,6 @@ class LocalStorageService {
       );
     }
 
-    // Carrega todas as tabelas do SQLite
     final catRows = await db.query('categories');
     final categories = catRows.map(_categoryFromSqliteRow).toList();
 
@@ -421,14 +480,25 @@ class LocalStorageService {
         _categoryToSqliteRow(category),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      return;
     }
+    final list = List<Category>.from(_memoryCategories);
+    final idx = list.indexWhere((c) => c.id == category.id);
+    if (idx >= 0) {
+      list[idx] = category;
+    } else {
+      list.add(category);
+    }
+    _memoryCategories = list;
   }
 
   Future<void> deleteCategoryById(String id) async {
     final db = await _tryGetSqlite();
     if (db != null) {
       await db.delete('categories', where: 'id = ?', whereArgs: [id]);
+      return;
     }
+    _memoryCategories = _memoryCategories.where((c) => c.id != id).toList();
   }
 
   Future<void> upsertTask(Task task) async {
@@ -439,14 +509,25 @@ class LocalStorageService {
         _taskToSqliteRow(task),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      return;
     }
+    final list = List<Task>.from(_memoryTasks);
+    final idx = list.indexWhere((t) => t.id == task.id);
+    if (idx >= 0) {
+      list[idx] = task;
+    } else {
+      list.insert(0, task);
+    }
+    _memoryTasks = list;
   }
 
   Future<void> deleteTaskById(String id) async {
     final db = await _tryGetSqlite();
     if (db != null) {
       await db.delete('tasks', where: 'id = ?', whereArgs: [id]);
+      return;
     }
+    _memoryTasks = _memoryTasks.where((t) => t.id != id).toList();
   }
 
   Future<void> upsertNote(Note note) async {
@@ -457,22 +538,30 @@ class LocalStorageService {
         _noteToSqliteRow(note),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      return;
     }
+    final list = List<Note>.from(_memoryNotes);
+    final idx = list.indexWhere((n) => n.id == note.id);
+    if (idx >= 0) {
+      list[idx] = note;
+    } else {
+      list.insert(0, note);
+    }
+    _memoryNotes = list;
   }
 
   Future<void> deleteNoteById(String id) async {
     final db = await _tryGetSqlite();
     if (db != null) {
       await db.delete('notes', where: 'id = ?', whereArgs: [id]);
+      return;
     }
+    _memoryNotes = _memoryNotes.where((n) => n.id != id).toList();
   }
 
   // --- Sincronização de Coleções (Transacional com Upsert + Remoção Seletiva) ---
 
-  Future<void> saveCategories(
-    List<Category> items, {
-    SharedPreferences? prefs,
-  }) async {
+  Future<void> saveCategories(List<Category> items) async {
     final db = await _tryGetSqlite();
     if (db != null) {
       await db.transaction((txn) async {
@@ -492,18 +581,12 @@ class LocalStorageService {
           );
         }
       });
+      return;
     }
-    final p = prefs ?? await SharedPreferences.getInstance();
-    await p.setString(
-      _kCategoriesKey,
-      jsonEncode(items.map((e) => e.toJson()).toList()),
-    );
+    _memoryCategories = List<Category>.from(items);
   }
 
-  Future<void> saveTasks(
-    List<Task> items, {
-    SharedPreferences? prefs,
-  }) async {
+  Future<void> saveTasks(List<Task> items) async {
     final db = await _tryGetSqlite();
     if (db != null) {
       await db.transaction((txn) async {
@@ -523,18 +606,12 @@ class LocalStorageService {
           );
         }
       });
+      return;
     }
-    final p = prefs ?? await SharedPreferences.getInstance();
-    await p.setString(
-      _kTasksKey,
-      jsonEncode(items.map((e) => e.toJson()).toList()),
-    );
+    _memoryTasks = List<Task>.from(items);
   }
 
-  Future<void> saveNotes(
-    List<Note> items, {
-    SharedPreferences? prefs,
-  }) async {
+  Future<void> saveNotes(List<Note> items) async {
     final db = await _tryGetSqlite();
     if (db != null) {
       await db.transaction((txn) async {
@@ -554,12 +631,9 @@ class LocalStorageService {
           );
         }
       });
+      return;
     }
-    final p = prefs ?? await SharedPreferences.getInstance();
-    await p.setString(
-      _kNotesKey,
-      jsonEncode(items.map((e) => e.toJson()).toList()),
-    );
+    _memoryNotes = List<Note>.from(items);
   }
 
   Future<void> saveGamification({
@@ -567,7 +641,6 @@ class LocalStorageService {
     required int currentLevel,
     required int streakDays,
     required Map<String, String> unlockedBadges,
-    SharedPreferences? prefs,
   }) async {
     final db = await _tryGetSqlite();
     if (db != null) {
@@ -577,34 +650,16 @@ class LocalStorageService {
         await _putMetaTxn(txn, 'streak_days', '$streakDays');
         await _putMetaTxn(txn, 'unlocked_badges', jsonEncode(unlockedBadges));
       });
+      return;
     }
-    final p = prefs ?? await SharedPreferences.getInstance();
-    await p.setInt(_kPointsKey, totalPoints);
-    await p.setInt(_kLevelKey, currentLevel);
-    await p.setInt(_kStreakKey, streakDays);
-    await p.setString(_kBadgesKey, jsonEncode(unlockedBadges));
+    _memoryMeta['total_points'] = '$totalPoints';
+    _memoryMeta['current_level'] = '$currentLevel';
+    _memoryMeta['streak_days'] = '$streakDays';
+    _memoryMeta['unlocked_badges'] = jsonEncode(unlockedBadges);
   }
 
-  Future<void> saveConnectedUser(User? user) async {
-    final db = await _tryGetSqlite();
-    if (db != null) {
-      if (user == null) {
-        await db.delete(
-          'app_metadata',
-          where: 'key = ?',
-          whereArgs: const ['connected_user'],
-        );
-      } else {
-        await _putMetaTxn(db, 'connected_user', jsonEncode(user.toJson()));
-      }
-    }
-    final p = await SharedPreferences.getInstance();
-    if (user == null) {
-      await p.remove(_kConnectedUserKey);
-    } else {
-      await p.setString(_kConnectedUserKey, jsonEncode(user.toJson()));
-    }
-  }
+  Future<void> saveConnectedUser(User? user) =>
+      _setMeta('connected_user', user != null ? jsonEncode(user.toJson()) : null);
 
   Future<void> saveSyncQueue(List<SyncOperation> queue) async {
     final db = await _tryGetSqlite();
@@ -626,12 +681,9 @@ class LocalStorageService {
           );
         }
       });
+      return;
     }
-    final p = await SharedPreferences.getInstance();
-    await p.setString(
-      _kSyncQueueKey,
-      jsonEncode(queue.map((e) => e.toJson()).toList()),
-    );
+    _memorySyncQueue = List<SyncOperation>.from(queue);
   }
 
   Future<void> saveSyncedEntityIds(Set<String> ids) async {
@@ -660,105 +712,34 @@ class LocalStorageService {
           );
         }
       });
+      return;
     }
-    final p = await SharedPreferences.getInstance();
-    await p.setStringList(_kSyncedIdsKey, ids.toList());
+    _memorySyncedIds = Set<String>.from(ids);
   }
 
-  Future<void> saveLastSyncedAt(String? iso) async {
-    final db = await _tryGetSqlite();
-    if (db != null) {
-      if (iso == null) {
-        await db.delete(
-          'app_metadata',
-          where: 'key = ?',
-          whereArgs: const ['last_synced_at'],
-        );
-      } else {
-        await _putMetaTxn(db, 'last_synced_at', iso);
-      }
-    }
-    final p = await SharedPreferences.getInstance();
-    if (iso == null) {
-      await p.remove(_kLastSyncedAtKey);
-    } else {
-      await p.setString(_kLastSyncedAtKey, iso);
-    }
-  }
+  Future<void> saveLastSyncedAt(String? iso) => _setMeta('last_synced_at', iso);
 
-  // --- Fallback / Migração Legada via SharedPreferences ---
+  // --- Fallback Seguro em Memória ---
 
-  Future<LocalDataSnapshot> _loadFromPrefsFallback({
+  LocalDataSnapshot _loadFromMemoryFallback({
     required List<Category> defaultCategories,
     required List<Task> defaultTasks,
     required List<Note> defaultNotes,
     required Map<String, String> defaultUnlockedBadges,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final initialized = prefs.getBool(_kLegacyInitializedKey) ?? false;
-
-    if (!initialized) {
-      await prefs.setString(
-        _kCategoriesKey,
-        jsonEncode(defaultCategories.map((e) => e.toJson()).toList()),
-      );
-      await prefs.setString(
-        _kTasksKey,
-        jsonEncode(defaultTasks.map((e) => e.toJson()).toList()),
-      );
-      await prefs.setString(
-        _kNotesKey,
-        jsonEncode(defaultNotes.map((e) => e.toJson()).toList()),
-      );
-      await prefs.setInt(_kPointsKey, 45);
-      await prefs.setInt(_kLevelKey, 1);
-      await prefs.setInt(_kStreakKey, 3);
-      await prefs.setString(_kBadgesKey, jsonEncode(defaultUnlockedBadges));
-      await prefs.setBool(_kLegacyInitializedKey, true);
-
-      return LocalDataSnapshot(
-        categories: List<Category>.from(defaultCategories),
-        tasks: List<Task>.from(defaultTasks),
-        notes: List<Note>.from(defaultNotes),
-        totalPoints: 45,
-        currentLevel: 1,
-        streakDays: 3,
-        unlockedBadges: Map<String, String>.from(defaultUnlockedBadges),
-        syncQueue: const [],
-        syncedEntityIds: const {},
-      );
-    }
-
-    final categories = _decodeList(
-      prefs.getString(_kCategoriesKey),
-      Category.fromJson,
-    );
-    final tasks = _decodeList(
-      prefs.getString(_kTasksKey),
-      Task.fromJson,
-    );
-    final notes = _decodeList(
-      prefs.getString(_kNotesKey),
-      Note.fromJson,
-    );
-    final syncQueue = _decodeList(
-      prefs.getString(_kSyncQueueKey),
-      SyncOperation.fromJson,
-    );
-
-    User? connectedUser;
-    final rawUser = prefs.getString(_kConnectedUserKey);
-    if (rawUser != null && rawUser.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(rawUser);
-        if (decoded is Map) {
-          connectedUser = User.fromJson(Map<String, dynamic>.from(decoded));
-        }
-      } catch (_) {}
+  }) {
+    if (!_memoryInitialized) {
+      _memoryInitialized = true;
+      _memoryCategories = List<Category>.from(defaultCategories);
+      _memoryTasks = List<Task>.from(defaultTasks);
+      _memoryNotes = List<Note>.from(defaultNotes);
+      _memoryMeta['total_points'] = '45';
+      _memoryMeta['current_level'] = '1';
+      _memoryMeta['streak_days'] = '3';
+      _memoryMeta['unlocked_badges'] = jsonEncode(defaultUnlockedBadges);
     }
 
     final unlockedBadges = <String, String>{};
-    final rawBadges = prefs.getString(_kBadgesKey);
+    final rawBadges = _memoryMeta['unlocked_badges'];
     if (rawBadges != null && rawBadges.isNotEmpty) {
       try {
         final decoded = jsonDecode(rawBadges);
@@ -774,37 +755,29 @@ class LocalStorageService {
       unlockedBadges.addAll(defaultUnlockedBadges);
     }
 
-    final syncedIds = (prefs.getStringList(_kSyncedIdsKey) ?? const []).toSet();
+    User? connectedUser;
+    final rawUser = _memoryMeta['connected_user'];
+    if (rawUser != null && rawUser.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawUser);
+        if (decoded is Map) {
+          connectedUser = User.fromJson(Map<String, dynamic>.from(decoded));
+        }
+      } catch (_) {}
+    }
 
     return LocalDataSnapshot(
-      categories: categories,
-      tasks: tasks,
-      notes: notes,
-      totalPoints: prefs.getInt(_kPointsKey) ?? 45,
-      currentLevel: prefs.getInt(_kLevelKey) ?? 1,
-      streakDays: prefs.getInt(_kStreakKey) ?? 3,
+      categories: List<Category>.from(_memoryCategories),
+      tasks: List<Task>.from(_memoryTasks),
+      notes: List<Note>.from(_memoryNotes),
+      totalPoints: int.tryParse(_memoryMeta['total_points'] ?? '') ?? 45,
+      currentLevel: int.tryParse(_memoryMeta['current_level'] ?? '') ?? 1,
+      streakDays: int.tryParse(_memoryMeta['streak_days'] ?? '') ?? 3,
       unlockedBadges: unlockedBadges,
       connectedUser: connectedUser,
-      syncQueue: syncQueue,
-      syncedEntityIds: syncedIds,
-      lastSyncedAt: prefs.getString(_kLastSyncedAtKey),
+      syncQueue: List<SyncOperation>.from(_memorySyncQueue),
+      syncedEntityIds: Set<String>.from(_memorySyncedIds),
+      lastSyncedAt: _memoryMeta['last_synced_at'],
     );
-  }
-
-  List<T> _decodeList<T>(
-    String? raw,
-    T Function(Map<String, dynamic>) fromJson,
-  ) {
-    if (raw == null || raw.isEmpty) return <T>[];
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        return decoded
-            .whereType<Map<dynamic, dynamic>>()
-            .map((e) => fromJson(Map<String, dynamic>.from(e)))
-            .toList();
-      }
-    } catch (_) {}
-    return <T>[];
   }
 }

@@ -1,10 +1,10 @@
 import 'package:app/pages/main_layout.dart';
+import 'package:app/services/local_storage_service.dart';
 import 'package:app/themes/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +22,7 @@ class TaskApp extends StatefulWidget {
 }
 
 class _TaskAppState extends State<TaskApp> {
+  final LocalStorageService _storage = LocalStorageService();
   ThemeMode _themeMode = ThemeMode.light;
 
   @override
@@ -32,8 +33,7 @@ class _TaskAppState extends State<TaskApp> {
 
   Future<void> _loadTheme() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = prefs.getString('app_theme_mode');
+      final saved = await _storage.loadThemeMode();
       if (saved != null && mounted) {
         setState(() {
           _themeMode = switch (saved) {
@@ -49,8 +49,7 @@ class _TaskAppState extends State<TaskApp> {
   Future<void> _setThemeMode(ThemeMode mode) async {
     setState(() => _themeMode = mode);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('app_theme_mode', mode.name);
+      await _storage.saveThemeMode(mode.name);
     } catch (_) {}
   }
 

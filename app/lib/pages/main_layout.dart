@@ -19,7 +19,6 @@ import 'package:app/services/sync_service.dart';
 import 'package:app/themes/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({
@@ -114,7 +113,6 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
 
   Future<void> _loadOfflineDataAndSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final defaultUnlocked = <String, String>{};
       for (final b in _badges) {
         if (b.unlockedAt != null) {
@@ -128,6 +126,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         defaultNotes: _notes,
         defaultUnlockedBadges: defaultUnlocked,
       );
+      final profile = await _storage.loadUserProfile(
+        connectedUsername: snapshot.connectedUser?.username,
+      );
+      final notifSettings = await _storage.loadNotificationSettings();
 
       if (!mounted) return;
       setState(() {
@@ -143,22 +145,8 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           return unlockedAt != null ? b.copyWith(unlockedAt: unlockedAt) : b;
         }).toList();
 
-        _profile = UserProfile(
-          displayName: prefs.getString('profile_display_name') ?? 'Bruno',
-          username:
-              snapshot.connectedUser?.username ??
-              prefs.getString('profile_username') ??
-              'Modo Offline',
-          avatarIcon: prefs.getString('profile_avatar_icon') ?? 'User',
-          avatarColor: prefs.getString('profile_avatar_color') ?? '#C0533A',
-        );
-        _notificationSettings = NotificationSettings(
-          enabled: prefs.getBool('notif_enabled') ?? true,
-          criticalAlerts: prefs.getBool('notif_critical') ?? true,
-          highAlerts: prefs.getBool('notif_high') ?? true,
-          mediumAlerts: prefs.getBool('notif_medium') ?? true,
-          soundAndVibration: prefs.getBool('notif_sound') ?? true,
-        );
+        _profile = profile;
+        _notificationSettings = notifSettings;
       });
 
       _syncService.initialize(
@@ -173,23 +161,14 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   Future<void> _updateProfile(UserProfile updated) async {
     setState(() => _profile = updated);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('profile_display_name', updated.displayName);
-      await prefs.setString('profile_username', updated.username);
-      await prefs.setString('profile_avatar_icon', updated.avatarIcon);
-      await prefs.setString('profile_avatar_color', updated.avatarColor);
+      await _storage.saveUserProfile(updated);
     } catch (_) {}
   }
 
   Future<void> _updateNotificationSettings(NotificationSettings updated) async {
     setState(() => _notificationSettings = updated);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('notif_enabled', updated.enabled);
-      await prefs.setBool('notif_critical', updated.criticalAlerts);
-      await prefs.setBool('notif_high', updated.highAlerts);
-      await prefs.setBool('notif_medium', updated.mediumAlerts);
-      await prefs.setBool('notif_sound', updated.soundAndVibration);
+      await _storage.saveNotificationSettings(updated);
     } catch (_) {}
   }
 

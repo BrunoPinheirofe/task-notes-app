@@ -13,11 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
     Intl.defaultLocale = 'pt_BR';
     await initializeDateFormatting('pt_BR', null);
   });
@@ -188,7 +186,6 @@ void main() {
   });
 
   test('SyncService compacta fila offline (coalescing) e permite uso sem conta', () async {
-    SharedPreferences.setMockInitialValues({});
     final storage = LocalStorageService();
     final api = ApiClient();
 
@@ -281,7 +278,6 @@ void main() {
   });
 
   test('SQLite preserva 100% dos dados entre atualizações de versão e cria backup .bak', () async {
-    SharedPreferences.setMockInitialValues({});
     final tempDir = await Directory.systemTemp.createTemp('caderno_sqlite_test_');
     final dbPath = p.join(tempDir.path, 'meu_caderno.db');
 
@@ -317,6 +313,7 @@ void main() {
         ],
         defaultUnlockedBadges: const {'first_task': '2026-11-15T10:00:00.000Z'},
       );
+      await storageV1.saveThemeMode('dark');
       await dbV1.close();
 
       // 2. Reabre o mesmo arquivo .db na versão 2 (simulando atualização do app)
@@ -337,6 +334,7 @@ void main() {
       expect(snapshotAfterUpgrade.notes.length, 1);
       expect(snapshotAfterUpgrade.notes.first.content, 'Nunca perder este texto');
       expect(snapshotAfterUpgrade.categories.first.name, 'Pessoal');
+      expect(await storageV2.loadThemeMode(), 'dark');
       expect(File('$dbPath.v1.bak').existsSync(), isTrue);
 
       await dbV2.close();
