@@ -16,6 +16,7 @@ class TasksPage extends StatefulWidget {
     required this.onDeleteTask,
     required this.onToggleTaskStatus,
     required this.onToggleSubtask,
+    this.onAiBreakdown,
     super.key,
   });
 
@@ -26,6 +27,7 @@ class TasksPage extends StatefulWidget {
   final ValueChanged<String> onDeleteTask;
   final ValueChanged<String> onToggleTaskStatus;
   final void Function(String taskId, String subtaskId) onToggleSubtask;
+  final Future<List<Subtask>> Function(String goal)? onAiBreakdown;
 
   @override
   State<TasksPage> createState() => _TasksPageState();
@@ -178,7 +180,6 @@ class _TasksPageState extends State<TasksPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ExportMenu(tasks: filtered, categories: widget.categories),
                   OutlinedButton.icon(
                     onPressed: () {
                       showRecurringTaskDialog(
@@ -210,6 +211,7 @@ class _TasksPageState extends State<TasksPage> {
                         context,
                         categories: widget.categories,
                         onSave: widget.onAddTask,
+                        onAiBreakdown: widget.onAiBreakdown,
                       );
                     },
                     style: FilledButton.styleFrom(
@@ -470,6 +472,7 @@ class _TasksPageState extends State<TasksPage> {
                       task: task,
                       categories: widget.categories,
                       onSave: widget.onUpdateTask,
+                      onAiBreakdown: widget.onAiBreakdown,
                     );
                   },
                   onDelete: widget.onDeleteTask,
@@ -570,6 +573,7 @@ class _TasksPageState extends State<TasksPage> {
                                 task: task,
                                 categories: widget.categories,
                                 onSave: widget.onUpdateTask,
+                                onAiBreakdown: widget.onAiBreakdown,
                               );
                             },
                             onDelete: () => widget.onDeleteTask(task.id),

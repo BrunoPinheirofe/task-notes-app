@@ -1,6 +1,36 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+List<dynamic> _safeDecodeList(dynamic raw) {
+  if (raw == null) return const [];
+  if (raw is List) return raw;
+  if (raw is String && raw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) return decoded;
+      if (decoded is String) {
+        final second = jsonDecode(decoded);
+        if (second is List) return second;
+      }
+    } catch (_) {}
+  }
+  return const [];
+}
+
+Map<String, dynamic>? _safeDecodeMap(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is Map<String, dynamic>) return raw;
+  if (raw is Map) return Map<String, dynamic>.from(raw);
+  if (raw is String && raw.isNotEmpty) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+  }
+  return null;
+}
 
 enum Priority {
   low('low', 'Baixa'),
@@ -213,6 +243,51 @@ class Task {
       subtasks: subtasks ?? this.subtasks,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    if (description != null) 'description': description,
+    'priority': priority.value,
+    'status': status.value,
+    if (categoryId != null) 'categoryId': categoryId,
+    if (dueDate != null) 'dueDate': dueDate,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'tags': tags,
+    if (recurrence != null) 'recurrence': recurrence!.toJson(),
+    if (parentTaskId != null) 'parentTaskId': parentTaskId,
+    if (occurrenceDate != null) 'occurrenceDate': occurrenceDate,
+    'subtasks': subtasks.map((s) => s.toJson()).toList(),
+  };
+
+  factory Task.fromJson(Map<String, dynamic> json) {
+    final nowIso = DateTime.now().toIso8601String();
+    final rawTags = _safeDecodeList(json['tags']);
+    final rawSubtasks = _safeDecodeList(json['subtasks']);
+    final recMap = _safeDecodeMap(json['recurrence']);
+    final desc = json['description'] as String?;
+
+    return Task(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: (desc != null && desc.isNotEmpty) ? desc : null,
+      priority: Priority.fromString(json['priority'] as String?),
+      status: TaskStatus.fromString(json['status'] as String?),
+      categoryId: json['categoryId'] as String?,
+      dueDate: json['dueDate'] as String?,
+      createdAt: json['createdAt'] as String? ?? nowIso,
+      updatedAt: json['updatedAt'] as String? ?? nowIso,
+      tags: rawTags.map((e) => e.toString()).toList(),
+      recurrence: recMap != null ? RecurrenceRule.fromJson(recMap) : null,
+      parentTaskId: json['parentTaskId'] as String?,
+      occurrenceDate: json['occurrenceDate'] as String?,
+      subtasks: rawSubtasks
+          .whereType<Map<dynamic, dynamic>>()
+          .map((m) => Subtask.fromJson(Map<String, dynamic>.from(m)))
+          .toList(),
+    );
+  }
 }
 
 class Note {
@@ -258,6 +333,64 @@ class Note {
       pinned: pinned ?? this.pinned,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'content': content,
+    if (categoryId != null) 'categoryId': categoryId,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'tags': tags,
+    'pinned': pinned,
+  };
+
+  factory Note.fromJson(Map<String, dynamic> json) {
+    final nowIso = DateTime.now().toIso8601String();
+    final rawTags = _safeDecodeList(json['tags']);
+    final pinnedVal = json['pinned'];
+    final isPinned = pinnedVal is bool
+        ? pinnedVal
+        : (pinnedVal is num ? pinnedVal != 0 : false);
+
+    return Note(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      content: json['content'] as String? ?? '',
+      categoryId: json['categoryId'] as String?,
+      createdAt: json['createdAt'] as String? ?? nowIso,
+      updatedAt: json['updatedAt'] as String? ?? nowIso,
+      tags: rawTags.map((e) => e.toString()).toList(),
+      pinned: isPinned,
+    );
+  }
+}
+
+Color parseHexColor(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  final val = int.tryParse('FF$cleaned', radix: 16);
+  return val != null ? Color(val) : const Color(0xFFC0533A);
+}
+
+IconData iconDataFromName(String icon) {
+  return switch (icon) {
+    'User' => LucideIcons.user,
+    'Briefcase' => LucideIcons.briefcase,
+    'BookOpen' => LucideIcons.bookOpen,
+    'Heart' => LucideIcons.heart,
+    'DollarSign' => LucideIcons.dollarSign,
+    'Home' => LucideIcons.house,
+    'Star' => LucideIcons.star,
+    'Zap' => LucideIcons.zap,
+    'Globe' => LucideIcons.globe,
+    'Music' => LucideIcons.music,
+    'Camera' => LucideIcons.camera,
+    'Coffee' => LucideIcons.coffee,
+    'Smile' => LucideIcons.smile,
+    'Target' => LucideIcons.target,
+    'Award' => LucideIcons.award,
+    _ => LucideIcons.tag,
+  };
 }
 
 class Category {
@@ -273,38 +406,172 @@ class Category {
   final String color;
   final String icon;
 
-  Color get parsedColor {
-    final hex = color.replaceFirst('#', '');
-    final val = int.tryParse('FF$hex', radix: 16);
-    return val != null ? Color(val) : const Color(0xFFC0533A);
-  }
+  Color get parsedColor => parseHexColor(color);
+  IconData get iconData => iconDataFromName(icon);
 
-  IconData get iconData {
-    return switch (icon) {
-      'User' => LucideIcons.user,
-      'Briefcase' => LucideIcons.briefcase,
-      'BookOpen' => LucideIcons.bookOpen,
-      'Heart' => LucideIcons.heart,
-      'DollarSign' => LucideIcons.dollarSign,
-      'Home' => LucideIcons.house,
-      'Star' => LucideIcons.star,
-      'Zap' => LucideIcons.zap,
-      'Globe' => LucideIcons.globe,
-      'Music' => LucideIcons.music,
-      'Camera' => LucideIcons.camera,
-      'Coffee' => LucideIcons.coffee,
-      'Smile' => LucideIcons.smile,
-      'Target' => LucideIcons.target,
-      'Award' => LucideIcons.award,
-      _ => LucideIcons.tag,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'color': color,
+    'icon': icon,
+  };
+
+  factory Category.fromJson(Map<String, dynamic> json) => Category(
+    id: json['id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    color: json['color'] as String? ?? '#C0533A',
+    icon: json['icon'] as String? ?? 'Tag',
+  );
 }
 
 class User {
   const User({required this.id, required this.username});
   final String id;
   final String username;
+
+  Map<String, dynamic> toJson() => {'id': id, 'username': username};
+
+  factory User.fromJson(Map<String, dynamic> json) => User(
+    id: json['id'] as String? ?? '',
+    username: json['username'] as String? ?? '',
+  );
+}
+
+enum SyncState {
+  localOnly,
+  synced,
+  syncing,
+  pendingOffline,
+}
+
+class SyncOperation {
+  const SyncOperation({
+    required this.id,
+    required this.entityType,
+    required this.action,
+    required this.entityId,
+    this.payload,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String entityType; // 'category' | 'task' | 'note'
+  final String action; // 'create' | 'update' | 'delete'
+  final String entityId;
+  final Map<String, dynamic>? payload;
+  final String updatedAt;
+
+  SyncOperation copyWith({
+    String? action,
+    Map<String, dynamic>? payload,
+    String? updatedAt,
+  }) {
+    return SyncOperation(
+      id: id,
+      entityType: entityType,
+      action: action ?? this.action,
+      entityId: entityId,
+      payload: payload ?? this.payload,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'entityType': entityType,
+    'action': action,
+    'entityId': entityId,
+    if (payload != null) 'payload': payload,
+    'updatedAt': updatedAt,
+  };
+
+  factory SyncOperation.fromJson(Map<String, dynamic> json) => SyncOperation(
+    id: json['id'] as String? ?? '',
+    entityType: json['entityType'] as String? ?? '',
+    action: json['action'] as String? ?? '',
+    entityId: json['entityId'] as String? ?? '',
+    payload: _safeDecodeMap(json['payload']),
+    updatedAt:
+        json['updatedAt'] as String? ?? DateTime.now().toIso8601String(),
+  );
+}
+
+class UserProfile {
+  const UserProfile({
+    this.displayName = 'Bruno',
+    this.username = 'nomedocabra@logado.com',
+    this.avatarIcon = 'User',
+    this.avatarColor = '#C0533A',
+  });
+
+  final String displayName;
+  final String username;
+  final String avatarIcon;
+  final String avatarColor;
+
+  Color get parsedColor => parseHexColor(avatarColor);
+  IconData get iconData => iconDataFromName(avatarIcon);
+
+  UserProfile copyWith({
+    String? displayName,
+    String? username,
+    String? avatarIcon,
+    String? avatarColor,
+  }) {
+    return UserProfile(
+      displayName: displayName ?? this.displayName,
+      username: username ?? this.username,
+      avatarIcon: avatarIcon ?? this.avatarIcon,
+      avatarColor: avatarColor ?? this.avatarColor,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'displayName': displayName,
+    'username': username,
+    'avatarIcon': avatarIcon,
+    'avatarColor': avatarColor,
+  };
+}
+
+class NotificationSettings {
+  const NotificationSettings({
+    this.enabled = true,
+    this.criticalAlerts = true,
+    this.highAlerts = true,
+    this.mediumAlerts = true,
+    this.soundAndVibration = true,
+  });
+
+  final bool enabled;
+  final bool criticalAlerts;
+  final bool highAlerts;
+  final bool mediumAlerts;
+  final bool soundAndVibration;
+
+  NotificationSettings copyWith({
+    bool? enabled,
+    bool? criticalAlerts,
+    bool? highAlerts,
+    bool? mediumAlerts,
+    bool? soundAndVibration,
+  }) {
+    return NotificationSettings(
+      enabled: enabled ?? this.enabled,
+      criticalAlerts: criticalAlerts ?? this.criticalAlerts,
+      highAlerts: highAlerts ?? this.highAlerts,
+      mediumAlerts: mediumAlerts ?? this.mediumAlerts,
+      soundAndVibration: soundAndVibration ?? this.soundAndVibration,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'enabled': enabled,
+    'criticalAlerts': criticalAlerts,
+    'highAlerts': highAlerts,
+    'mediumAlerts': mediumAlerts,
+    'soundAndVibration': soundAndVibration,
+  };
 }
 
 enum NotificationUrgency { critical, high, medium, low }

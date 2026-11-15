@@ -1,14 +1,23 @@
+import 'package:app/models/models.dart';
+import 'package:app/services/api_client.dart';
 import 'package:app/themes/app_colors.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({
+    this.apiClient,
     this.onAuthenticated,
+    this.onUserAuthenticated,
+    this.onContinueOffline,
     super.key,
   });
 
+  final ApiClient? apiClient;
   final void Function(String username)? onAuthenticated;
+  final void Function(User user)? onUserAuthenticated;
+  final VoidCallback? onContinueOffline;
 
   @override
   State<AuthPage> createState() => _AuthPageState();
@@ -21,6 +30,7 @@ class _AuthPageState extends State<AuthPage> {
 
   bool _isLogin = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -32,26 +42,80 @@ class _AuthPageState extends State<AuthPage> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    setState(() => _isLoading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     final username = _usernameController.text.trim();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isLogin ? 'Bem-vindo de volta!' : 'Conta criada com sucesso!',
+    final password = _passwordController.text;
+    final api = widget.apiClient;
+
+    try {
+      User user;
+      if (api != null) {
+        user = _isLogin
+            ? await api.login(username, password)
+            : await api.register(username, password);
+      } else {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        user = User(id: 'local-$username', username: username);
+      }
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isLogin
+                ? 'Conectado! Sincronizando dados em segundo plano...'
+                : 'Conta criada! Sincronizando seus dados locais...',
+          ),
         ),
-      ),
-    );
-    widget.onAuthenticated?.call(username);
+      );
+      widget.onUserAuthenticated?.call(user);
+      widget.onAuthenticated?.call(user.username);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final status = e.response?.statusCode;
+      final serverMsg = e.response?.data is String
+          ? e.response?.data as String
+          : null;
+      setState(() {
+        _isLoading = false;
+        if (status == 401) {
+          _errorMessage = 'Usuário ou senha incorretos.';
+        } else if (status == 400 && serverMsg != null && serverMsg.isNotEmpty) {
+          _errorMessage = serverMsg;
+        } else {
+          _errorMessage =
+              'Servidor inacessível no momento. Você pode continuar usando o app 100% offline.';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage =
+            'Não foi possível conectar ao servidor. Seus dados continuam salvos localmente.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? AppColors.darkBackground : AppColors.background;
+    final cardBg = isDark
+        ? AppColors.darkCardBackground
+        : AppColors.cardBackGround;
+    final borderColor = isDark ? AppColors.darkCardBorder : AppColors.border;
+    final textPrimary = isDark ? AppColors.darkOnSurface : AppColors.onPrimary;
+    final textMuted = isDark ? AppColors.darkOnMuted : AppColors.onMuted;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: bgColor,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -61,9 +125,9 @@ class _AuthPageState extends State<AuthPage> {
               child: Container(
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
-                  color: AppColors.cardBackGround,
+                  color: cardBg,
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border, width: 1.5),
+                  border: Border.all(color: borderColor, width: 1.5),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
@@ -86,7 +150,7 @@ class _AuthPageState extends State<AuthPage> {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
-                          LucideIcons.bookOpen,
+                          LucideIcons.cloudUpload,
                           color: Colors.white,
                           size: 24,
                         ),
@@ -95,30 +159,58 @@ class _AuthPageState extends State<AuthPage> {
 
                       // Title
                       Text(
-                        'Meu Caderno',
-                        style: Theme.of(context).textTheme.headlineMedium
+                        'Sincronização na Nuvem',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
                               fontWeight: FontWeight.bold,
-                              color: AppColors.onPrimary,
+                              color: textPrimary,
                             ),
                       ),
                       const SizedBox(height: 6),
 
                       // Subtitle
-                      const Text(
-                        'Suas tarefas e notas organizadas em um só lugar.',
+                      Text(
+                        'Conecte uma conta para sincronizar em segundo plano. Tudo o que você já criou offline será preservado.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: 'Lora',
-                          fontSize: 13,
+                          fontSize: 12.5,
                           fontStyle: FontStyle.italic,
-                          color: AppColors.onMuted,
+                          color: textMuted,
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
+
+                      if (_errorMessage != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.destructive.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.destructive.withValues(
+                                alpha: 0.35,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(
+                              fontFamily: 'Lora',
+                              fontSize: 12,
+                              color: AppColors.destructive,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       // Username
-                      const Align(
+                      Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Usuário',
@@ -126,15 +218,23 @@ class _AuthPageState extends State<AuthPage> {
                             fontFamily: 'Lora',
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.onPrimary,
+                            color: textPrimary,
                           ),
                         ),
                       ),
                       const SizedBox(height: 6),
                       TextFormField(
                         controller: _usernameController,
-                        style: const TextStyle(fontFamily: 'Lora', fontSize: 14),
-                        decoration: _inputDecoration('Seu nome de usuário'),
+                        style: TextStyle(
+                          fontFamily: 'Lora',
+                          fontSize: 14,
+                          color: textPrimary,
+                        ),
+                        decoration: _inputDecoration(
+                          'Seu nome de usuário',
+                          bgColor,
+                          borderColor,
+                        ),
                         validator: (val) => (val == null || val.trim().isEmpty)
                             ? 'Informe seu usuário'
                             : null,
@@ -142,7 +242,7 @@ class _AuthPageState extends State<AuthPage> {
                       const SizedBox(height: 16),
 
                       // Password
-                      const Align(
+                      Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Senha',
@@ -150,7 +250,7 @@ class _AuthPageState extends State<AuthPage> {
                             fontFamily: 'Lora',
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.onPrimary,
+                            color: textPrimary,
                           ),
                         ),
                       ),
@@ -158,8 +258,16 @@ class _AuthPageState extends State<AuthPage> {
                       TextFormField(
                         controller: _passwordController,
                         obscureText: true,
-                        style: const TextStyle(fontFamily: 'Lora', fontSize: 14),
-                        decoration: _inputDecoration('••••••••'),
+                        style: TextStyle(
+                          fontFamily: 'Lora',
+                          fontSize: 14,
+                          color: textPrimary,
+                        ),
+                        decoration: _inputDecoration(
+                          '••••••••',
+                          bgColor,
+                          borderColor,
+                        ),
                         validator: (val) => (val == null || val.isEmpty)
                             ? 'Informe sua senha'
                             : null,
@@ -194,7 +302,9 @@ class _AuthPageState extends State<AuthPage> {
                                 const SizedBox(width: 8),
                               ],
                               Text(
-                                _isLogin ? 'Entrar' : 'Criar Conta',
+                                _isLogin
+                                    ? 'Entrar e Sincronizar'
+                                    : 'Criar Conta e Sincronizar',
                                 style: const TextStyle(
                                   fontFamily: 'Lora',
                                   fontWeight: FontWeight.bold,
@@ -205,7 +315,7 @@ class _AuthPageState extends State<AuthPage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
 
                       // Toggle Login/Register
                       Wrap(
@@ -217,10 +327,10 @@ class _AuthPageState extends State<AuthPage> {
                             _isLogin
                                 ? 'Ainda não tem uma conta?'
                                 : 'Já possui uma conta?',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Lora',
                               fontSize: 13,
-                              color: AppColors.onMuted,
+                              color: textMuted,
                             ),
                           ),
                           GestureDetector(
@@ -238,6 +348,28 @@ class _AuthPageState extends State<AuthPage> {
                           ),
                         ],
                       ),
+
+                      if (widget.onContinueOffline != null) ...[
+                        const SizedBox(height: 16),
+                        Divider(color: borderColor),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: widget.onContinueOffline,
+                          icon: Icon(
+                            LucideIcons.arrowLeft,
+                            size: 15,
+                            color: textMuted,
+                          ),
+                          label: Text(
+                            'Continuar usando somente offline',
+                            style: TextStyle(
+                              fontFamily: 'Lora',
+                              fontSize: 12.5,
+                              color: textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -249,20 +381,24 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
+  InputDecoration _inputDecoration(
+    String hint,
+    Color bgColor,
+    Color borderColor,
+  ) {
     return InputDecoration(
       hintText: hint,
       isDense: true,
       filled: true,
-      fillColor: AppColors.background,
+      fillColor: bgColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: borderColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.border),
+        borderSide: BorderSide(color: borderColor),
       ),
     );
   }

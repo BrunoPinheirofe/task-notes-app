@@ -107,29 +107,35 @@ Documento de acompanhamento com todas as tarefas necessárias para equiparar o a
 
 ## 3. Funcionalidades e Regras de Negócio
 
-### 3.1. Navegação e Layout (`MainLayout` / `DrawerApp`)
+### 3.1. Navegação e Layout (`MainLayout` / `DrawerApp` / `AppNavigationBar`)
 - [x] Conectar os 6 itens do `DrawerApp` (`Visão geral`, `Tarefas`, `Anotações`, `Categorias`, `Relatórios`, `Conquistas`) para alternar a página ativa no `MainLayout`.
-- [x] Atualizar dinamicamente o estado `selected` do item ativo no Drawer.
-- [x] Exibir badges de contagem de notificações críticas/altas nos itens *Visão geral* e *Tarefas* do Drawer e no ícone da `AppBar`.
+- [x] Criar `AppNavigationBar` flutuante (estilo pílula/caderno) com as 4 páginas principais (`Início`, `Tarefas`, `Anotações`, `Relatórios`) sincronizada com o `DrawerApp`.
+- [x] Atualizar dinamicamente o estado `selected` do item ativo no Drawer e na Navigation Bar.
+- [x] Exibir badges de contagem de notificações críticas/altas nos itens *Visão geral* e *Tarefas* do Drawer, na Navigation Bar e no ícone da `AppBar`.
 - [x] Configurar ação do `FloatingActionButton` na `HomePage` (ex.: abrir modal de criação rápida de tarefa/anotação).
 
-### 3.2. Autenticação e Sessão
-- [ ] Implementar serviço de autenticação consumindo `GET /api/user`, `POST /api/login`, `POST /api/register` e `POST /api/logout`.
-- [ ] Redirecionar automaticamente para `AuthPage` quando não houver sessão ativa ou ao receber `401 Unauthorized`.
-- [ ] Exibir o `username` real do usuário logado no rodapé do `DrawerApp` e fazer o botão **Sair** encerrar a sessão.
+### 3.2. Autenticação Opcional e Modo Offline-First
+- [x] Permitir uso 100% offline do aplicativo sem exigir login inicial (Modo Local/Offline como padrão ao abrir o app).
+- [x] Implementar serviço de autenticação opcional (`POST /api/login`, `POST /api/register`, `POST /api/logout`, `GET /api/user`) para quando o usuário desejar ativar sincronização na nuvem.
+- [x] Migrar e enfileirar automaticamente todos os dados criados offline (`Categories`, `Tasks`, `Notes`) ao conectar ou criar uma conta posteriormente, sem perda de dados.
+- [x] Exibir status de conta/sincronização no rodapé do `DrawerApp` (*"Sincronizar na nuvem"* quando offline ou *"Usar só offline / Sair"* quando conectado, mantendo dados locais).
 
-### 3.3. Gerenciamento de Dados e Integração com Backend
-- [ ] Criar modelos de dados Dart (`User`, `Task`, `Subtask`, `RecurrenceRule`, `Note`, `Category`) compatíveis com `shared/schema.ts`.
-- [ ] Implementar CRUD de **Categorias** (`GET`, `POST`, `DELETE /api/categories`).
-  - [ ] Validar exclusão: bloquear exclusão de categoria que possua tarefas ou notas associadas.
-- [ ] Implementar CRUD de **Tarefas** (`GET`, `POST`, `PATCH`, `DELETE /api/tasks`).
-  - [ ] Implementar busca textual (título, descrição, tags) e filtros combinados (prioridade, status, categoria).
-  - [ ] Implementar regra de submetas: ao marcar/desmarcar submetas, atualizar status da tarefa principal automaticamente para `done` (se todas completas) ou `in_progress`.
-  - [ ] Implementar trava de conclusão: impedir que uma tarefa com submetas pendentes seja marcada como `done` (exibindo alerta ao usuário).
-- [ ] Implementar CRUD de **Anotações** (`GET`, `POST`, `PATCH`, `DELETE /api/notes`), incluindo toggle de `pinned`, busca e filtro por categoria.
-- [ ] Implementar integração com **IA Breakdown** (`POST /api/ai/breakdown`) enviando `{ goal: taskTitle }` e convertendo o retorno em submetas.
-- [ ] Implementar lógica de **Tarefas Recorrentes** (cálculo de próximas ocorrências e textos descritivos de intervalo equivalentes a `client/src/lib/recurrence.ts`).
-- [ ] Implementar função do botão **Resetar Dados** com diálogo de confirmação.
+### 3.3. Armazenamento Local, Sincronização em 2º Plano e Backend
+- [x] Criar modelos de dados Dart (`User`, `Task`, `Subtask`, `RecurrenceRule`, `Note`, `Category`, `SyncOperation`) compatíveis com `shared/schema.ts` e serialização JSON completa.
+- [x] Implementar banco de dados **SQLite embarcado (`meu_caderno.db`)** via `AppDatabase` e `LocalStorageService` como fonte única da verdade (com modo `WAL`, migração não-destrutiva por `PRAGMA table_info`, backup automático `.bak` antes de upgrades de versão e migração transparente do JSON legado).
+- [x] Implementar `SyncService` com fila persistente (*Outbox Pattern*) e compactação de operações (*coalescing*), sincronizando silenciosamente em segundo plano (*debounce*, retomada do app e timer periódico).
+- [x] Criar indicador visual sutil de sincronização (`SyncStatusIndicator`) na `AppBar` (animação discreta durante sync, confirmação suave e aviso não intrusivo de pendências offline).
+- [x] Ajustar backend (`shared/schema.ts` e `server/routes.ts`) para aceitar IDs e timestamps gerados offline com *upsert* idempotente.
+- [x] Implementar CRUD Offline-First + Sync de **Categorias** (`GET`, `POST`, `DELETE /api/categories`).
+  - [x] Validar exclusão: bloquear exclusão de categoria que possua tarefas ou notas associadas.
+- [x] Implementar CRUD Offline-First + Sync de **Tarefas** (`GET`, `POST`, `PATCH`, `DELETE /api/tasks`).
+  - [x] Implementar busca textual (título, descrição, tags) e filtros combinados (prioridade, status, categoria).
+  - [x] Implementar regra de submetas: ao marcar/desmarcar submetas, atualizar status da tarefa principal automaticamente para `done` (se todas completas) ou `in_progress`.
+  - [x] Implementar trava de conclusão: impedir que uma tarefa com submetas pendentes seja marcada como `done` (exibindo alerta ao usuário).
+- [x] Implementar CRUD Offline-First + Sync de **Anotações** (`GET`, `POST`, `PATCH`, `DELETE /api/notes`), incluindo toggle de `pinned`, busca e filtro por categoria.
+- [x] Implementar integração com **IA Breakdown** (`POST /api/ai/breakdown`) enviando `{ goal: taskTitle }` e convertendo o retorno em submetas.
+- [x] Implementar lógica de **Tarefas Recorrentes** (cálculo de próximas ocorrências e textos descritivos de intervalo equivalentes a `client/src/lib/recurrence.ts`).
+- [x] Implementar função do botão **Resetar Dados** com diálogo de confirmação.
 
 ### 3.4. Dados Dinâmicos na Dashboard
 - [x] Implementar função de saudação dinâmica baseada na hora atual (`Bom dia!`, `Boa tarde!`, `Boa noite!`).

@@ -80,65 +80,69 @@ class _NotesPageState extends State<NotesPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Anotações',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.onPrimary,
+              SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 10,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Anotações',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.onPrimary,
+                              ),
+                        ),
+                        Text(
+                          '${filtered.length} de ${widget.notes.length} anotações',
+                          style: const TextStyle(
+                            fontFamily: 'Lora',
+                            fontSize: 13,
+                            color: AppColors.onMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        
+                        FilledButton.icon(
+                          onPressed: () {
+                            showNoteDialog(
+                              context,
+                              categories: widget.categories,
+                              onSave: widget.onAddNote,
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
                             ),
-                      ),
-                      Text(
-                        '${filtered.length} de ${widget.notes.length} anotações',
-                        style: const TextStyle(
-                          fontFamily: 'Lora',
-                          fontSize: 13,
-                          color: AppColors.onMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      ExportMenu(
-                        notes: filtered,
-                        categories: widget.categories,
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: () {
-                          showNoteDialog(
-                            context,
-                            categories: widget.categories,
-                            onSave: widget.onAddNote,
-                          );
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 8,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                          icon: const Icon(LucideIcons.plus, size: 15),
+                          label: const Text(
+                            'Nova Anotação',
+                            style: TextStyle(fontFamily: 'Lora', fontSize: 13),
                           ),
                         ),
-                        icon: const Icon(LucideIcons.plus, size: 15),
-                        label: const Text(
-                          'Nova Anotação',
-                          style: TextStyle(fontFamily: 'Lora', fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
 

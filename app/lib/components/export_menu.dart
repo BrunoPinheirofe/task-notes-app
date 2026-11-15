@@ -1,5 +1,6 @@
 import 'package:app/models/models.dart';
 import 'package:app/themes/app_colors.dart';
+import 'package:app/utils/data_exporter.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -37,28 +38,44 @@ class ExportMenu extends StatelessWidget {
       onSelected: (value) {
         switch (value) {
           case 'tasks_csv':
-            onExportTasksCsv?.call();
+            if (onExportTasksCsv != null) {
+              onExportTasksCsv!();
+            } else {
+              DataExporter.exportTasksCsv(tasks, categories);
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('${tasks.length} tarefas exportadas para CSV'),
               ),
             );
           case 'tasks_pdf':
-            onExportTasksPdf?.call();
+            if (onExportTasksPdf != null) {
+              onExportTasksPdf!();
+            } else {
+              DataExporter.exportTasksPdf(tasks, categories);
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('${tasks.length} tarefas exportadas para PDF'),
               ),
             );
           case 'notes_csv':
-            onExportNotesCsv?.call();
+            if (onExportNotesCsv != null) {
+              onExportNotesCsv!();
+            } else {
+              DataExporter.exportNotesCsv(notes, categories);
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('${notes.length} anotações exportadas para CSV'),
               ),
             );
           case 'notes_pdf':
-            onExportNotesPdf?.call();
+            if (onExportNotesPdf != null) {
+              onExportNotesPdf!();
+            } else {
+              DataExporter.exportNotesPdf(notes, categories);
+            }
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('${notes.length} anotações exportadas para PDF'),

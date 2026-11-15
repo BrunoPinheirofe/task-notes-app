@@ -1,3 +1,4 @@
+import 'package:app/models/models.dart';
 import 'package:app/themes/app_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -7,7 +8,13 @@ class DrawerApp extends StatelessWidget {
     this.selectedIndex = 0,
     this.onSelectIndex,
     this.username = 'nomedocabra@logado.com',
+    this.profile,
     this.urgentBadgeCount = 0,
+    this.isCloudConnected = false,
+    this.syncState = SyncState.localOnly,
+    this.pendingSyncCount = 0,
+    this.onConnectCloud,
+    this.onManualSync,
     this.onLogout,
     super.key,
   });
@@ -15,7 +22,13 @@ class DrawerApp extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int>? onSelectIndex;
   final String username;
+  final UserProfile? profile;
   final int urgentBadgeCount;
+  final bool isCloudConnected;
+  final SyncState syncState;
+  final int pendingSyncCount;
+  final VoidCallback? onConnectCloud;
+  final VoidCallback? onManualSync;
   final VoidCallback? onLogout;
 
   static const List<({String label, IconData icon, bool showBadge})> _routes = [
@@ -47,6 +60,11 @@ class DrawerApp extends StatelessWidget {
     (
       label: 'Conquistas',
       icon: LucideIcons.trophy200,
+      showBadge: false,
+    ),
+    (
+      label: 'Configurações',
+      icon: LucideIcons.settings200,
       showBadge: false,
     ),
   ];
@@ -90,7 +108,20 @@ class DrawerApp extends StatelessWidget {
             thickness: 1,
             height: 1,
           ),
-          _FooterDrawer(username: username, onLogout: onLogout),
+          _FooterDrawer(
+            username: username,
+            profile: profile,
+            isCloudConnected: isCloudConnected,
+            syncState: syncState,
+            pendingSyncCount: pendingSyncCount,
+            onOpenSettings: () {
+              Navigator.of(context).pop();
+              onSelectIndex?.call(6);
+            },
+            onConnectCloud: onConnectCloud,
+            onManualSync: onManualSync,
+            onLogout: onLogout,
+          ),
         ],
       ),
     );
@@ -105,7 +136,7 @@ class _HeadDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: 60, bottom: 16, left: 16, right: 16),
+      margin: const EdgeInsets.only(top: 48, bottom: 14, left: 16, right: 16),
       child: Row(
         children: [
           Stack(
@@ -215,7 +246,7 @@ class _NavigationItemDrawer extends StatelessWidget {
                 ],
               )
             : null,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
             Icon(
@@ -255,84 +286,187 @@ class _NavigationItemDrawer extends StatelessWidget {
 class _FooterDrawer extends StatelessWidget {
   const _FooterDrawer({
     required this.username,
+    this.profile,
+    this.isCloudConnected = false,
+    this.syncState = SyncState.localOnly,
+    this.pendingSyncCount = 0,
+    this.onOpenSettings,
+    this.onConnectCloud,
+    this.onManualSync,
     this.onLogout,
   });
 
   final String username;
+  final UserProfile? profile;
+  final bool isCloudConnected;
+  final SyncState syncState;
+  final int pendingSyncCount;
+  final VoidCallback? onOpenSettings;
+  final VoidCallback? onConnectCloud;
+  final VoidCallback? onManualSync;
   final VoidCallback? onLogout;
+
+  String _syncLabel() {
+    if (!isCloudConnected) {
+      return 'Modo Offline • Salvo no aparelho';
+    }
+    return switch (syncState) {
+      SyncState.syncing => 'Sincronizando em 2º plano...',
+      SyncState.synced => 'Sincronizado na nuvem',
+      SyncState.pendingOffline => pendingSyncCount > 0
+          ? 'Offline • $pendingSyncCount salvo(s) localmente'
+          : 'Offline • Aguardando conexão',
+      SyncState.localOnly => 'Modo Offline • Salvo no aparelho',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
+    final displayTitle = (profile?.displayName.isNotEmpty ?? false)
+        ? profile!.displayName
+        : username;
+    final avatarBg = profile != null
+        ? profile!.parsedColor
+        : AppColors.sidebarActiveItem;
+    final avatarIcon = profile != null ? profile!.iconData : LucideIcons.user;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
       child: Column(
         crossAxisAlignment: .center,
-        spacing: 16,
+        spacing: 14,
         children: [
-          Row(
-            spacing: 12,
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  borderRadius: .circular(50),
-                  color: AppColors.sidebarActiveItem,
-                ),
-                child: const Icon(
-                  LucideIcons.user,
-                  size: 16,
-                  color: AppColors.onSidebarBackground,
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: .start,
-                  children: [
-                    Text(
-                      username,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.onSidebarBackground,
-                      ),
-                    ),
-                    Text(
-                      'Logado',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: AppColors.accentSidebar,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
           InkWell(
-            onTap: () {
-              Navigator.of(context).pop();
-              onLogout?.call();
-            },
-            borderRadius: BorderRadius.circular(6),
+            onTap: onOpenSettings,
+            borderRadius: BorderRadius.circular(8),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 spacing: 12,
                 children: [
-                  const Icon(
-                    LucideIcons.logOut200,
-                    size: 18,
-                    color: AppColors.onSidebarBackground,
-                  ),
-                  Text(
-                    'Sair',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.onSidebarBackground,
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      borderRadius: .circular(50),
+                      color: avatarBg,
                     ),
+                    child: Icon(
+                      avatarIcon,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: .start,
+                      children: [
+                        Text(
+                          displayTitle,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: AppColors.onSidebarBackground,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        Text(
+                          _syncLabel(),
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: AppColors.accentSidebar,
+                                fontSize: 11.5,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    LucideIcons.settings200,
+                    size: 15,
+                    color: AppColors.accentSidebar,
                   ),
                 ],
               ),
             ),
           ),
+          if (!isCloudConnected)
+            InkWell(
+              onTap: () {
+                Navigator.of(context).pop();
+                onConnectCloud?.call();
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                child: Row(
+                  spacing: 12,
+                  children: [
+                    const Icon(
+                      LucideIcons.cloudUpload,
+                      size: 18,
+                      color: AppColors.onSidebarAccent,
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Sincronizar na nuvem',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColors.onSidebarBackground,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onLogout?.call();
+                    },
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 6,
+                        horizontal: 4,
+                      ),
+                      child: Row(
+                        spacing: 12,
+                        children: [
+                          const Icon(
+                            LucideIcons.logOut200,
+                            size: 18,
+                            color: AppColors.onSidebarBackground,
+                          ),
+                          Text(
+                            'Usar só offline / Sair',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.onSidebarBackground,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (onManualSync != null)
+                  IconButton(
+                    onPressed: onManualSync,
+                    tooltip: 'Sincronizar agora',
+                    icon: const Icon(
+                      LucideIcons.refreshCw,
+                      size: 16,
+                      color: AppColors.accentSidebar,
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );
